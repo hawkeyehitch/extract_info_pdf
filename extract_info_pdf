@@ -1,0 +1,100 @@
+import pdfplumber
+import re
+from docx import Document
+from docx.shared import Pt
+
+def read_pdf(file_path):
+    print(f"Reading PDF file: {file_path}")
+    pages = []
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                pages.append(page_text)
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+    return pages
+
+def extract_framework_info(pages):
+    print("Extracting framework information...")
+    frameworks = ["\\.NET", "J2EE", "Coldfusion", "Ruby on Rails", "AJAX"]
+    web_application_servers = ["Web Application", "Servers"]
+    
+    framework_pattern = re.compile(r'(?i)({})'.format('|'.join(frameworks)))
+    section_pattern = re.compile(r'(?i)({})'.format('|'.join(web_application_servers)))
+    
+    relevant_pages = []
+    
+    for page in pages:
+        if framework_pattern.search(page) and section_pattern.search(page):
+            relevant_pages.append(page)
+    
+    print(f"Number of relevant pages found: {len(relevant_pages)}")
+    
+    return relevant_pages
+
+def underline_text(run):
+    run.font.underline = True
+
+def add_index_heading(doc, heading_text, doc_page_number):
+    heading = doc.add_heading(level=2)
+    run = heading.add_run(f"{heading_text} (Page {doc_page_number})")
+    run.font.size = Pt(14)
+    run.bold = True
+    underline_text(run)
+
+def save_to_word(pages, output_path):
+    print(f"Saving information to Word document: {output_path}")
+    doc = Document()
+    doc.add_heading('Extracted Information about Framework Vulnerabilities', level=1)
+    
+    chapter_pattern = re.compile(r'Chapter \d+ ■ [^\d]+ \d+')
+    index = []
+
+    for page_number, page in enumerate(pages, start=1):
+        # Check for chapter heading
+        chapter_match = chapter_pattern.search(page)
+        if chapter_match:
+            chapter_heading = chapter_match.group()
+            index.append((chapter_heading, doc.paragraphs[-1]._element.getparent().index(doc.paragraphs[-1]._element) + 1))
+
+        for line in page.split('\n'):
+            if line.strip():  # Skip empty lines
+                para = doc.add_paragraph(line)
+                if "Web Application" in line or "Servers" in line:  # Example condition for titles
+                    run = para.runs[0]
+                    underline_text(run)
+        doc.add_paragraph("="*80)  # Add a separator
+
+    # Add index to the beginning of the document
+    doc.add_page_break()
+    index_heading = doc.add_heading('Index', level=1)
+    for chapter_heading, doc_page_number in index:
+        add_index_heading(doc, chapter_heading, doc_page_number)
+
+    try:
+        print(f"Saving to: {output_path}")
+        doc.save(output_path)
+        print("Document saved successfully.")
+    except Exception as e:
+        print(f"Error saving document: {e}")
+
+def main():
+    pdf_path = r'C:\Users\John\Desktop\Cyber- EBOOKS\pentesting\web\Web App Hacking (Hackers Handbook).pdf'
+    output_path = r'C:\Users\John\Documents\Framework_Vulnerabilities.docx'  # Changed path to Documents folder
+    
+    pdf_pages = read_pdf(pdf_path)
+    
+    if pdf_pages:
+        print("PDF text successfully read.")
+        framework_info = extract_framework_info(pdf_pages)
+        
+        if framework_info:
+            save_to_word(framework_info, output_path)
+        else:
+            print("No relevant information found in the PDF.")
+    else:
+        print("Failed to read any text from the PDF.")
+
+if __name__ == "__main__":
+    main()
